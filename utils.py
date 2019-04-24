@@ -179,7 +179,7 @@ def eval_input_fn(filenames):
 
 def train_input_fn_2(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=100, count=100))
+    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=100, count=200))
     dataset = dataset.map(lambda x: read_img(x, 3))
     dataset = dataset.map(preprocess_train_image)
     dataset = dataset.prefetch(-1)
@@ -206,8 +206,7 @@ def test_input_fn(filenames):
 if __name__ == '__main__':
     tf.enable_eager_execution()
     train_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_train_HR/*')
-    dataset = train_input_fn_2(train_filenames)
+    dataset = train_input_fn(train_filenames)
     for value in dataset:
-        print(tf.rank(value[0]))
         print(tf.shape(value[0]))
         print(tf.shape(value[1]))
