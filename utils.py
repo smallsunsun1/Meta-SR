@@ -33,7 +33,6 @@ def preprocess_img(image):
     else:
         temp_image = image
     input = cv2.resize(temp_image, (w // 3, h // 3), interpolation=cv2.INTER_CUBIC)
-    # input = tf.image.resize_images(image, [h // 3, w // 3], tf.image.ResizeMethod.BICUBIC)
     h, w = np.shape(input)[:2]
     total_input = []
     total_label = []
@@ -68,6 +67,8 @@ def preprocess_img(image):
                 sub_input = cv2.filter2D(sub_input, -1, kernel=kernel)
             sub_label = sub_label / 255.0
             sub_input = sub_input / 255.0
+            sub_label = sub_label.astype(np.float32)
+            sub_input = sub_input.astype(np.float32)
             total_input.append(sub_input)
             total_label.append(sub_label)
     return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
@@ -126,8 +127,8 @@ def preprocess_eval_image(image):
     input = tf.image.resize_images(image, [h // 3, w // 3], tf.image.ResizeMethod.BICUBIC)
     input = tf.cast(input, tf.float32)
     image = tf.cast(image, tf.float32)
-    input = tf.divide(input, 255.0)
-    image = tf.divide(image, 255.0)
+    # input = tf.divide(input, 255.0)
+    # image = tf.divide(image, 255.0)
     input = tf.expand_dims(input, axis=0)
     image = tf.expand_dims(image, axis=0)
     return input, image
