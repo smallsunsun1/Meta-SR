@@ -11,3 +11,7 @@ Super Resolution RDN and Meta-SR implementation use tf.estimator
 
 # support for meta-SR is now Avaliable.
 # Caution! the training and inference for meta-SR is extremely slowly, the problem maybe the while_loop bring a lot of conv operation which cause the very limit speed! When training meta-SR just set batch_size=1 and image_size=32,if too large, the gpu memory is not enough!
+
+
+# 5.8 UPDATE
+# add a new implementation of meta-SR, support batch_size=10 and image_size=50, speed up training speed, but data_input_fn need to replace py_func function with truely tensorflow code to accerate the training speed more.
