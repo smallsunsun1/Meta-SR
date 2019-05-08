@@ -1,5 +1,6 @@
 # Meta-SR: A Magnification-Arbitrary Network for Super-Resolution && RDN model implementation
 Super Resolution RDN and Meta-SR implementation use tf.estimator
+Code is running on tensorflow-gpu==1.12
 
 # Step by Step tutorial
 - 1.Download the DIV2K_valid_HR.zip DIV2K_train_HR.zip DIV2K_test_HR.zip
