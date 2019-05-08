@@ -92,7 +92,7 @@ def model_fn_meta_SR(features, labels, mode, params):
     X, Y = tf.meshgrid(range_w, range_h)
     position = tf.stack([Y, X], axis=-1)
     position = tf.cast(position, tf.float32)
-    position = position - tf.floordiv(position, scale)
+    position = tf.divide(position, scale) - tf.floordiv(position, scale)
     other = tf.ones(shape=[ratio_h, ratio_w, 1]) / scale
     position = tf.concat([position, other], axis=-1)
     position = tf.reshape(position, [-1, 3])
