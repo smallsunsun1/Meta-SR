@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 D = EasyDict()
-D.image_size = 32
+D.image_size = 50
 # D.c_dim = 3  # the size of channel, if use meta-SR, c_dim=64, else 3
 D.c_dim = 64
 D.scale = 2  # the size of scale factor for preprocessing input image,
@@ -15,8 +15,8 @@ D.G = 64
 D.G0 = 64
 D.kernel_size = 3
 D.learning_rate = 1e-4
-D.stride = 16
-D.meta_sr_upsample_scale = 2
+D.stride = 25
+D.meta_sr_upsample_scale = 3
 D.meta_sr_kernel_size = 3
 D.meta_sr_c_dim = 3
 D.model = 'meta-SR'   # RDN for train RDN model, else train meta-SR model

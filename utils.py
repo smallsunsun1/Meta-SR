@@ -37,11 +37,15 @@ def preprocess_img(image):
     total_input = []
     total_label = []
     kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)
-    for x in range(0, h * D.scale - D.image_size * D.scale + 1, D.stride * D.scale):
-        for y in range(0, w * D.scale - D.image_size * D.scale + 1, D.stride * D.scale):
-            sub_label = image[x:x + D.image_size * D.scale, y:y + D.image_size * D.scale]
-            x_i = x // D.scale
-            y_i = y // D.scale
+    if D.model == 'RDN':
+        scale = D.scale
+    else:
+        scale = D.scale
+    for x in range(0, h * scale - D.image_size * scale + 1, D.stride * scale):
+        for y in range(0, w * scale - D.image_size * scale + 1, D.stride * scale):
+            sub_label = image[x:x + D.image_size * scale, y:y + D.image_size * scale]
+            x_i = x // scale
+            y_i = y // scale
             sub_input = input[x_i:x_i + D.image_size, y_i:y_i + D.image_size]
             noise = np.random.normal(size=np.shape(sub_input))
             probability_noise = np.random.uniform(0, 10, size=())
