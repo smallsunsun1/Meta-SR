@@ -32,15 +32,15 @@ def preprocess_img(image):
         temp_image = cv2.GaussianBlur(image, ksize=(7, 7), sigmaX=1.0)
     else:
         temp_image = image
-    input = cv2.resize(temp_image, (w // 3, h // 3), interpolation=cv2.INTER_CUBIC)
-    h, w = np.shape(input)[:2]
-    total_input = []
-    total_label = []
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)
     if D.model == 'RDN':
         scale = D.scale
     else:
         scale = D.scale
+    input = cv2.resize(temp_image, (w // scale, h // scale), interpolation=cv2.INTER_CUBIC)
+    h, w = np.shape(input)[:2]
+    total_input = []
+    total_label = []
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)
     for x in range(0, h * scale - D.image_size * scale + 1, D.stride * scale):
         for y in range(0, w * scale - D.image_size * scale + 1, D.stride * scale):
             sub_label = image[x:x + D.image_size * scale, y:y + D.image_size * scale]
@@ -78,51 +78,58 @@ def preprocess_img(image):
     return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
 
 
-# def preprocess_metaSR_img(image):
-#     h = np.shape(image)[0]
-#     w = np.shape(image)[1]
-#     probability_gaussian = np.random.uniform(0, 10, size=())
-#     if probability_gaussian > 5:
-#         temp_image = cv2.GaussianBlur(image, ksize=(7, 7), sigmaX=1.6)
-#     else:
-#         temp_image = image
-#     input = cv2.resize(temp_image, (w // 3, h // 3), interpolation=cv2.INTER_CUBIC)
-#     scale = np.random.random_integers(2, 4)
-#     h, w = np.shape(input)[:2]
-#     total_input = []
-#     total_label = []
-#     total_scale = []
-#     for x in range(0, h * scale - D.image_size * scale + 1, D.stride * scale):
-#         for y in range(0, w * scale - D.image_size * scale + 1, D.stride * scale):
-#             sub_label = image[x:x + D.image_size * scale, y:y + D.image_size * scale]
-#             x_i = x // scale
-#             y_i = y // scale
-#             sub_input = input[x_i:x_i + D.image_size, y_i:y_i + D.image_size]
-#             noise = np.random.normal(size=np.shape(sub_input))
-#             probability_noise = np.random.uniform(0, 10, size=())
-#             probability_horizon = np.random.uniform(0, 10, size=())
-#             probability_top_down = np.random.uniform(0, 10, size=())
-#             probability_rorate = np.random.uniform(0, 10, size=())
-#             if probability_noise > 5:
-#                 sub_input.astype(np.float32)
-#                 sub_input = sub_input +  0.3 * noise
-#                 sub_input = np.clip(sub_input, 0, 255)
-#                 sub_input.astype(np.uint8)
-#             if probability_horizon > 5:
-#                 sub_input = cv2.flip(sub_input, 1)
-#                 sub_label = cv2.flip(sub_label, 1)
-#             if probability_top_down > 5:
-#                 sub_input = cv2.flip(sub_input, 0)
-#                 sub_label = cv2.flip(sub_label, 0)
-#             if probability_rorate > 5:
-#                 sub_input = np.rot90(sub_input)
-#                 sub_label = np.rot90(sub_label)
-#             sub_label = sub_label / 255.0
-#             sub_input = sub_input / 255.0
-#             total_input.append(sub_input)
-#             total_label.append(sub_label)
-#             total_scale.append(scale)
-#     return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32), np.stack(total_scale, axis=0)
+def preprocess_metaSR_img(image):
+    h = np.shape(image)[0]
+    w = np.shape(image)[1]
+    probability_gaussian = np.random.uniform(0, 10, size=())
+    if probability_gaussian > 5:
+        temp_image = cv2.GaussianBlur(image, ksize=(7, 7), sigmaX=1.0)
+    else:
+        temp_image = image
+    if D.model == 'RDN':
+        scale = D.scale
+    else:
+        scale = np.random.random_integers(2, 4, size=[])
+    input = cv2.resize(temp_image, (w // scale, h // scale), interpolation=cv2.INTER_CUBIC)
+    h, w = np.shape(input)[:2]
+    total_input = []
+    total_label = []
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)
+    for x in range(0, h * scale - D.image_size * scale + 1, D.stride * scale):
+        for y in range(0, w * scale - D.image_size * scale + 1, D.stride * scale):
+            sub_label = image[x:x + D.image_size * scale, y:y + D.image_size * scale]
+            x_i = x // scale
+            y_i = y // scale
+            sub_input = input[x_i:x_i + D.image_size, y_i:y_i + D.image_size]
+            noise = np.random.normal(size=np.shape(sub_input))
+            probability_noise = np.random.uniform(0, 10, size=())
+            probability_horizon = np.random.uniform(0, 10, size=())
+            probability_top_down = np.random.uniform(0, 10, size=())
+            probability_rorate = np.random.uniform(0, 10, size=())
+            probability_ruihua = np.random.uniform(0, 10, size=())
+            if probability_noise > 5:
+                sub_input.astype(np.float32)
+                sub_input = sub_input +  0.3 * noise
+                sub_input = np.clip(sub_input, 0, 255)
+                sub_input.astype(np.uint8)
+            if probability_horizon > 5:
+                sub_input = cv2.flip(sub_input, 1)
+                sub_label = cv2.flip(sub_label, 1)
+            if probability_top_down > 5:
+                sub_input = cv2.flip(sub_input, 0)
+                sub_label = cv2.flip(sub_label, 0)
+            if probability_rorate > 5:
+                sub_input = np.rot90(sub_input)
+                sub_label = np.rot90(sub_label)
+            if probability_ruihua > 5 and probability_gaussian > 5:
+                sub_input = cv2.filter2D(sub_input, -1, kernel=kernel)
+            sub_label = sub_label / 255.0
+            sub_input = sub_input / 255.0
+            sub_label = sub_label.astype(np.float32)
+            sub_input = sub_input.astype(np.float32)
+            total_input.append(sub_input)
+            total_label.append(sub_label)
+    return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
 
 
 def preprocess_eval_image(image):
@@ -167,11 +174,17 @@ def generate_dict(features, labels, scales):
 
 def train_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(128, 200))
     dataset = dataset.map(lambda x: read_img(x, 3))
-    dataset = dataset.map(lambda x:tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+    if D.model == 'RDN':
+        dataset = dataset.map(lambda x:tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+    else:
+        dataset = dataset.map(lambda x:tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
     dataset = dataset.apply(tf.data.experimental.unbatch())
-    dataset = dataset.batch(batch_size=D.batch_size)
+    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
+    if D.model == 'RDN':
+        dataset = dataset.batch(batch_size=D.batch_size)
+    else:
+        dataset = dataset.batch(batch_size=1)
     dataset = dataset.prefetch(-1)
     return dataset
 

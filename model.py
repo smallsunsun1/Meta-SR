@@ -20,7 +20,7 @@ def model_fn(features, labels, mode, params):
     batch_size = params.get('batch_size', 32)
     learning_rate = params.get('learning_rate', 0.0001)
     image_size = params.get('image_size', 32)
-    if mode == tf.estimator.ModeKeys.TRAIN:
+    if mode != tf.estimator.ModeKeys.PREDICT:
         features.set_shape([None, None, None, 3])
         labels.set_shape([None, None, None, 3])
     F_1 = keras.layers.Conv2D(filters=G0, kernel_size=(ks, ks), padding='same')(features)
@@ -34,7 +34,7 @@ def model_fn(features, labels, mode, params):
     if mode != tf.estimator.ModeKeys.PREDICT:
         loss = tf.reduce_mean(tf.abs(labels - IHR))
         tf.summary.scalar('loss', loss)
-        tf.summary.image('SR_image', IHR, max_outputs=3)
+        tf.summary.image('SR_image', IHR, max_outputs=10)
         if mode == tf.estimator.ModeKeys.TRAIN:
             train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss,
                                                                       global_step=tf.train.get_or_create_global_step())
@@ -177,11 +177,11 @@ def model_fn_meta_SR_new(features, labels, mode, params):
     meta_sr_upsample_scale = params.get('meta_sr_upsample_scale', 3)
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        features.set_shape([batch_size, None, None, 3])
-        labels.set_shape([batch_size, None, None, 3])
+        features.set_shape([None, None, None, 3])
+        labels.set_shape([None, None, None, 3])
     if mode == tf.estimator.ModeKeys.EVAL:
-        features.set_shape([batch_size, None, None, 3])
-        labels.set_shape([batch_size, None, None, 3])
+        features.set_shape([None, None, None, 3])
+        labels.set_shape([None, None, None, 3])
     F_1 = keras.layers.Conv2D(filters=G0, kernel_size=(ks, ks), padding='same')(features)
     F0 = keras.layers.Conv2D(filters=G, kernel_size=(ks, ks), padding='same')(F_1)
     FD = RDBs(F0)
@@ -194,16 +194,10 @@ def model_fn_meta_SR_new(features, labels, mode, params):
     if mode != tf.estimator.ModeKeys.PREDICT:
         label_shape = tf.shape(labels)
         scale = tf.cast(label_shape[1] / feature_shape[1], tf.float32)
-        label_h = label_shape[1]
-        label_w = label_shape[2]
+        output_shape = label_shape
     else:
         scale = float(meta_sr_upsample_scale)
-    if mode == tf.estimator.ModeKeys.PREDICT:
         output_shape = feature_shape * meta_sr_upsample_scale
-        Scale = meta_sr_upsample_scale
-    else:
-        output_shape = feature_shape * Dscale
-        Scale = Dscale
     X, Y = tf.meshgrid(tf.range(output_shape[2]), tf.range(output_shape[1]))
     position = tf.stack([Y, X], axis=-1)
     position = tf.cast(position, tf.float32)
@@ -216,6 +210,7 @@ def model_fn_meta_SR_new(features, labels, mode, params):
     """注释掉用于真正的meta-sr模式"""
     IHR = tf.pad(IHR, paddings=[[0, 0], [1, 1], [1, 1], [0, 0]])
     b = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    Scale = tf.cast(scale, tf.int32)
     def cond(i, j, h, w, b):
         return tf.less(i, h)
 
@@ -330,9 +325,8 @@ def model_fn_meta_SR_new(features, labels, mode, params):
 
 
 if __name__ == '__main__':
-    num_gpus = 2
-    model_dir = "./models_metaSR_new_v2"
-    # model_dir = './models_v3'
+    num_gpus = 1
+    model_dir = D.model_dir
     train_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_train_HR/*')
     eval_filenames = glob.glob('/home/admin-seu/sss/Dataset/test_data/*')
     test_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_test_HR/*')
@@ -343,7 +337,7 @@ if __name__ == '__main__':
         session_configs = tf.ConfigProto(allow_soft_placement=True)
         session_configs.gpu_options.allow_growth = True
         config = tf.estimator.RunConfig(train_distribute=strategy, session_config=session_configs,
-                                        log_step_count_steps=50, save_checkpoints_steps=2000,
+                                        log_step_count_steps=5, save_checkpoints_steps=2000,
                                         eval_distribute=strategy, save_summary_steps=500)
         if D.model == 'RDN':
             Estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, config=config,
