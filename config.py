@@ -2,6 +2,7 @@ from easydict import EasyDict
 
 D = EasyDict()
 D.image_size = 50
+D.num_gpus = 1
 D.c_dim = 3  # the size of channel, if use meta-SR, c_dim=64, else 3
 # D.c_dim = 64
 D.scale = 2  # the size of scale factor for preprocessing input image,
@@ -19,6 +20,6 @@ D.stride = 25
 D.meta_sr_upsample_scale = 3
 D.meta_sr_kernel_size = 3
 D.meta_sr_c_dim = 3
-D.model = 'RDN'   # RDN for train RDN model, else train meta-SR model
-D.mode = 'predict'  # train or predict the model, use predict to predict the model
-D.model_dir = './models_v5'
+D.model = 'meta-SR'   # RDN for train RDN model, else train meta-SR model
+D.mode = 'train'  # train or predict the model, use predict to predict the model
+D.model_dir = './models_metaSR_v2'

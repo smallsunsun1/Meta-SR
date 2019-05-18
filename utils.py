@@ -15,6 +15,7 @@ def read_img(filename, scale=3):
     image = image[:h, :w, :]
     return image
 
+
 def read_test_img(filename):
     data = tf.io.read_file(filename)
     image = tf.image.decode_png(data, channels=3)
@@ -55,7 +56,7 @@ def preprocess_img(image):
             probability_ruihua = np.random.uniform(0, 10, size=())
             if probability_noise > 5:
                 sub_input.astype(np.float32)
-                sub_input = sub_input +  0.3 * noise
+                sub_input = sub_input + 0.3 * noise
                 sub_input = np.clip(sub_input, 0, 255)
                 sub_input.astype(np.uint8)
             if probability_horizon > 5:
@@ -109,7 +110,7 @@ def preprocess_metaSR_img(image):
             probability_ruihua = np.random.uniform(0, 10, size=())
             if probability_noise > 5:
                 sub_input.astype(np.float32)
-                sub_input = sub_input +  0.3 * noise
+                sub_input = sub_input + 0.3 * noise
                 sub_input = np.clip(sub_input, 0, 255)
                 sub_input.astype(np.uint8)
             if probability_horizon > 5:
@@ -132,17 +133,123 @@ def preprocess_metaSR_img(image):
     return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
 
 
+def tf_preprocess_metaSR_img(image):
+    h = tf.shape(image)[0]
+    w = tf.shape(image)[1]
+    image = tf.cast(image, tf.float32)
+    probability_gaussian = tf.random.uniform(shape=(), minval=0, maxval=10)
+    temp_image = tf.cond(tf.greater(probability_gaussian, 5), lambda: image,
+                         lambda: image + tf.random.truncated_normal(shape=tf.shape(image)))
+    temp_image = tf.clip_by_value(temp_image, 0, 255)
+    if D.model == 'RDN':
+        scale = D.scale
+    else:
+        scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
+    input = tf.squeeze(tf.image.resize_bicubic(tf.expand_dims(temp_image, 0), (h // scale, w // scale)))
+    h_ = tf.shape(input)[0]
+    w_ = tf.shape(input)[1]
+    total_input = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    total_label = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    stride = tf.convert_to_tensor(D.stride, tf.int32)
+    image_size = tf.convert_to_tensor(D.image_size, tf.int32)
+
+    def cond(i, j, h, w, b1, b2, index):
+        return tf.less(i, h)
+
+    def body(i, j, h, w, b1, b2, index):
+        sub_label = image[i * scale: i * scale + image_size * scale, j * scale:j * scale + image_size * scale]
+        sub_input = input[i:i + image_size, j:j + image_size]
+        probability_horizon = tf.random.uniform(shape=[], maxval=10)
+        probability_top_down = tf.random.uniform(shape=[], maxval=10)
+        probability_rotate = tf.random.uniform(shape=[], maxval=10)
+        sub_input = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(sub_label), lambda: sub_label)
+        sub_input = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(sub_label), lambda: sub_label)
+        sub_input = tf.cond(probability_rotate > 5, lambda: tf.image.rot90(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_rotate > 5, lambda: tf.image.rot90(sub_label), lambda: sub_label)
+        sub_input = tf.cast(sub_input / 255.0, tf.float32)
+        sub_label = tf.cast(sub_label / 255.0, tf.float32)
+        b1 = b1.write(index, sub_input)
+        b2 = b2.write(index, sub_label)
+        i = tf.cond(tf.greater_equal(j + stride, w), lambda: i + stride, lambda: i)
+        j = tf.cond(tf.greater_equal(j + stride, w), lambda: 0, lambda: j + stride)
+        index = tf.add(index, 1)
+        return i, j, h, w, b1, b2, index
+
+    i_, j_, h, w, arr1, arr2, _ = tf.while_loop(cond, body,
+                                                [0, 0, h_ - image_size, w_ - image_size, total_input, total_label, 0])
+    arr1 = arr1.stack()
+    arr2 = arr2.stack()
+    return arr1, arr2
+
+def tf_preprocess_metaSR_img_new(image):
+    h = tf.shape(image)[0]
+    w = tf.shape(image)[1]
+    image = tf.cast(image, tf.float32)
+    probability_gaussian = tf.random.uniform(shape=(), minval=0, maxval=10)
+    temp_image = tf.cond(tf.greater(probability_gaussian, 5), lambda: image,
+                         lambda: image + tf.random.truncated_normal(shape=tf.shape(image)))
+    temp_image = tf.clip_by_value(temp_image, 0, 255)
+    image_size = D.image_size
+    scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
+    input = tf.squeeze(tf.image.resize_bicubic(tf.expand_dims(temp_image, 0), (h // scale, w // scale)))
+    h_i = tf.shape(input)[0]
+    w_i = tf.shape(input)[1]
+    x_range = tf.range(h_i - image_size)
+    y_range = tf.range(w_i - image_size)
+    x_range = tf.random.shuffle(x_range)
+    y_range = tf.random.shuffle(y_range)
+    size = 16
+    x_indices = x_range[:size]
+    y_indices = y_range[:size]
+    total_input = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    total_label = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    xy_indices = tf.meshgrid(x_indices, y_indices)
+    xy_indices = tf.stack(xy_indices, axis=-1)
+    xy_indices = tf.reshape(xy_indices, [-1, 2])
+    def cond(i, n, b1, b2):
+        return i < n
+    def body(i, n, b1, b2):
+        sub_label = image[xy_indices[i][0] * scale: xy_indices[i][0] * scale + image_size * scale, xy_indices[i][1] * scale:xy_indices[i][1] * scale + image_size * scale]
+        sub_input = input[xy_indices[i][0]: xy_indices[i][0] + image_size, xy_indices[i][1]:xy_indices[i][1] + image_size]
+        probability_horizon = tf.random.uniform(shape=[], maxval=10)
+        probability_top_down = tf.random.uniform(shape=[], maxval=10)
+        probability_rotate = tf.random.uniform(shape=[], maxval=10)
+        sub_input = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(sub_label), lambda: sub_label)
+        sub_input = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(sub_label), lambda: sub_label)
+        sub_input = tf.cond(probability_rotate > 5, lambda: tf.image.rot90(sub_input), lambda: sub_input)
+        sub_label = tf.cond(probability_rotate > 5, lambda: tf.image.rot90(sub_label), lambda: sub_label)
+        sub_input = tf.cast(sub_input / 255.0, tf.float32)
+        sub_label = tf.cast(sub_label / 255.0, tf.float32)
+        b1 = b1.write(i, sub_input)
+        b2 = b2.write(i, sub_label)
+        i = tf.add(i, 1)
+        return i, n, b1, b2
+    _, _, arr1, arr2 = tf.while_loop(cond, body, [0, size * size, total_input, total_label])
+    arr1 = arr1.stack()
+    arr2 = arr2.stack()
+    return arr1, arr2
+
+
+
 def preprocess_eval_image(image):
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
-    input = tf.image.resize_images(image, [h // 3, w // 3], tf.image.ResizeMethod.BICUBIC)
+    if D.model == 'RDN':
+        input = tf.image.resize_images(image, [h // 3, w // 3], tf.image.ResizeMethod.BICUBIC)
+    else:
+        input = tf.image.resize_images(image, [h // D.meta_sr_upsample_scale, w // D.meta_sr_upsample_scale], tf.image.ResizeMethod.BICUBIC)
     input = tf.cast(input, tf.float32)
     image = tf.cast(image, tf.float32)
-    # input = tf.divide(input, 255.0)
-    # image = tf.divide(image, 255.0)
+    input = tf.divide(input, 255.0)
+    image = tf.divide(image, 255.0)
     input = tf.expand_dims(input, axis=0)
     image = tf.expand_dims(image, axis=0)
     return input, image
+
 
 def preprocess_train_image(image):
     h = tf.shape(image)[0]
@@ -152,7 +259,7 @@ def preprocess_train_image(image):
     probability_horizon = tf.random.uniform(shape=(), minval=0, maxval=10)
     probability_top_down = tf.random.uniform(shape=(), minval=0, maxval=10)
     probability_rorate = tf.random.uniform(shape=(), minval=0, maxval=10)
-    input = tf.cond(probability_horizon > 5, lambda :tf.image.flip_left_right(input), lambda :input)
+    input = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(input), lambda: input)
     image = tf.cond(probability_horizon > 5, lambda: tf.image.flip_left_right(image), lambda: image)
     input = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(input), lambda: input)
     image = tf.cond(probability_top_down > 5, lambda: tf.image.flip_up_down(image), lambda: image)
@@ -161,58 +268,57 @@ def preprocess_train_image(image):
     input = tf.cast(input, tf.float32)
     image = tf.cast(image, tf.float32)
     noise = tf.random.normal(shape=tf.shape(input))
-    input = tf.clip_by_value(tf.cond(probability_noise > 5, lambda :input + noise, lambda :input), clip_value_min=0, clip_value_max=255)
+    input = tf.clip_by_value(tf.cond(probability_noise > 5, lambda: input + noise, lambda: input), clip_value_min=0,
+                             clip_value_max=255)
     input = tf.divide(input, 255.0)
     image = tf.divide(image, 255.0)
     input = tf.expand_dims(input, axis=0)
     image = tf.expand_dims(image, axis=0)
     return input, image
 
+
 def generate_dict(features, labels, scales):
-    return {"features":features, "scales":scales}, labels
+    return {"features": features, "scales": scales}, labels
 
 
 def train_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
     dataset = dataset.map(lambda x: read_img(x, 3))
     if D.model == 'RDN':
-        dataset = dataset.map(lambda x:tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
     else:
-        dataset = dataset.map(lambda x:tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
+        # dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.map(tf_preprocess_metaSR_img, num_parallel_calls=20)
     dataset = dataset.apply(tf.data.experimental.unbatch())
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
     if D.model == 'RDN':
         dataset = dataset.batch(batch_size=D.batch_size)
     else:
         dataset = dataset.batch(batch_size=1)
+    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
     dataset = dataset.prefetch(-1)
     return dataset
+
+def train_input_fn_v2(filenames):
+    dataset = tf.data.Dataset.from_tensor_slices(filenames)
+    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
+    dataset = dataset.map(lambda x: read_img(x, 3))
+    if D.model == 'RDN':
+        dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+    else:
+        # dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.map(tf_preprocess_metaSR_img_new, num_parallel_calls=20)
+    dataset = dataset.apply(tf.data.experimental.unbatch())
+    dataset = dataset.batch(batch_size=D.batch_size)
+    dataset = dataset.prefetch(-1)
+    return dataset
+
 
 def eval_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.map(lambda x: read_img(x, 3))
+    dataset = dataset.map(lambda x: read_img(x, D.meta_sr_upsample_scale))
     dataset = dataset.map(preprocess_eval_image)
     dataset = dataset.prefetch(-1)
     return dataset
-
-def train_input_fn_2(filenames):
-    dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=100, count=200))
-    dataset = dataset.map(lambda x: read_img(x, 3))
-    dataset = dataset.map(preprocess_train_image)
-    dataset = dataset.prefetch(-1)
-    return dataset
-
-# def train_metaSR_input_fn(filenames):
-#     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-#     dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(128, 200))
-#     dataset = dataset.map(lambda x: read_img(x, 3))
-#     dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
-#     dataset = dataset.apply(tf.data.experimental.unbatch())
-#     dataset = dataset.batch(batch_size=D.batch_size)
-#     dataset = dataset.map(generate_dict)
-#     dataset = dataset.prefetch(-1)
-#     return dataset
 
 def test_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
@@ -224,7 +330,10 @@ def test_input_fn(filenames):
 if __name__ == '__main__':
     tf.enable_eager_execution()
     train_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_train_HR/*')
-    dataset = train_input_fn(train_filenames)
+    test_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_test_HR/*')
+    # dataset = eval_input_fn(test_filenames)
+    dataset = train_input_fn_v2(train_filenames)
     for value in dataset:
+        # print(value)
         print(tf.shape(value[0]))
         print(tf.shape(value[1]))
