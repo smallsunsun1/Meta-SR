@@ -76,21 +76,31 @@ def preprocess_img(image):
             sub_input = sub_input.astype(np.float32)
             total_input.append(sub_input)
             total_label.append(sub_label)
-    return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
+    indices = np.arange(0, len(total_input))
+    indices = np.random.shuffle(indices)
+    indices = indices[:D.batch_size]
+    output1 = np.stack(total_input, axis=0).astype(np.float32)[indices]
+    output2 = np.stack(total_label, axis=0).astype(np.float32)[indices]
+    return output1[indices], output2[indices]
 
 
 def preprocess_metaSR_img(image):
+    if D.model == 'RDN':
+        scale = D.scale
+    else:
+        scale = np.random.random_integers(2, 4, size=[])
     h = np.shape(image)[0]
     w = np.shape(image)[1]
+    h_ = np.shape(image)[0]
+    w_ = np.shape(image)[1]
+    h_ = h_ // scale * scale
+    w_ = w_ // scale * scale
+    image = image[:h_, :w_, :]
     probability_gaussian = np.random.uniform(0, 10, size=())
     if probability_gaussian > 5:
         temp_image = cv2.GaussianBlur(image, ksize=(7, 7), sigmaX=1.0)
     else:
         temp_image = image
-    if D.model == 'RDN':
-        scale = D.scale
-    else:
-        scale = np.random.random_integers(2, 4, size=[])
     input = cv2.resize(temp_image, (w // scale, h // scale), interpolation=cv2.INTER_CUBIC)
     h, w = np.shape(input)[:2]
     total_input = []
@@ -130,10 +140,21 @@ def preprocess_metaSR_img(image):
             sub_input = sub_input.astype(np.float32)
             total_input.append(sub_input)
             total_label.append(sub_label)
-    return np.stack(total_input, axis=0).astype(np.float32), np.stack(total_label, axis=0).astype(np.float32)
+    indices = np.arange(0, len(total_input))
+    np.random.shuffle(indices)
+    indices = indices[:D.batch_size]
+    output1 = np.stack(total_input, axis=0).astype(np.float32)
+    output2 = np.stack(total_label, axis=0).astype(np.float32)
+    return output1[indices], output2[indices]
 
 
 def tf_preprocess_metaSR_img(image):
+    scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
+    h_ = tf.shape(image)[0]
+    w_ = tf.shape(image)[1]
+    h_ = h_ // scale * scale
+    w_ = w_ // scale * scale
+    image = image[:h_, :w_, :]
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
     image = tf.cast(image, tf.float32)
@@ -143,8 +164,6 @@ def tf_preprocess_metaSR_img(image):
     temp_image = tf.clip_by_value(temp_image, 0, 255)
     if D.model == 'RDN':
         scale = D.scale
-    else:
-        scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
     input = tf.squeeze(tf.image.resize_bicubic(tf.expand_dims(temp_image, 0), (h // scale, w // scale)))
     h_ = tf.shape(input)[0]
     w_ = tf.shape(input)[1]
@@ -184,6 +203,12 @@ def tf_preprocess_metaSR_img(image):
     return arr1, arr2
 
 def tf_preprocess_metaSR_img_new(image):
+    scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
+    h_ = tf.shape(image)[0]
+    w_ = tf.shape(image)[1]
+    h_ = h_ // scale * scale
+    w_ = w_ // scale * scale
+    image = image[:h_, :w_, :]
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
     image = tf.cast(image, tf.float32)
@@ -192,7 +217,6 @@ def tf_preprocess_metaSR_img_new(image):
                          lambda: image + tf.random.truncated_normal(shape=tf.shape(image)))
     temp_image = tf.clip_by_value(temp_image, 0, 255)
     image_size = D.image_size
-    scale = tf.random.uniform(shape=(), minval=2, maxval=5, dtype=tf.int32)
     input = tf.squeeze(tf.image.resize_bicubic(tf.expand_dims(temp_image, 0), (h // scale, w // scale)))
     h_i = tf.shape(input)[0]
     w_i = tf.shape(input)[1]
@@ -200,7 +224,7 @@ def tf_preprocess_metaSR_img_new(image):
     y_range = tf.range(w_i - image_size)
     x_range = tf.random.shuffle(x_range)
     y_range = tf.random.shuffle(y_range)
-    size = 16
+    size = 8
     x_indices = x_range[:size]
     y_indices = y_range[:size]
     total_input = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
@@ -239,7 +263,7 @@ def preprocess_eval_image(image):
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
     if D.model == 'RDN':
-        input = tf.image.resize_images(image, [h // 3, w // 3], tf.image.ResizeMethod.BICUBIC)
+        input = tf.image.resize_images(image, [h // D.scale, w // D.scale], tf.image.ResizeMethod.BICUBIC)
     else:
         input = tf.image.resize_images(image, [h // D.meta_sr_upsample_scale, w // D.meta_sr_upsample_scale], tf.image.ResizeMethod.BICUBIC)
     input = tf.cast(input, tf.float32)
@@ -283,32 +307,28 @@ def generate_dict(features, labels, scales):
 
 def train_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.map(lambda x: read_img(x, 3))
+    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
+    dataset = dataset.map(lambda x: read_img(x, 1))
     if D.model == 'RDN':
         dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
     else:
-        # dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
-        dataset = dataset.map(tf_preprocess_metaSR_img, num_parallel_calls=20)
-    dataset = dataset.apply(tf.data.experimental.unbatch())
-    if D.model == 'RDN':
-        dataset = dataset.batch(batch_size=D.batch_size)
-    else:
-        dataset = dataset.batch(batch_size=1)
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
+        dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
+        # dataset = dataset.map(tf_preprocess_metaSR_img, num_parallel_calls=20)
+    # dataset = dataset.apply(tf.data.experimental.unbatch())
+    # dataset = dataset.batch(batch_size=D.batch_size)
     dataset = dataset.prefetch(-1)
     return dataset
 
 def train_input_fn_v2(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
     dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
-    dataset = dataset.map(lambda x: read_img(x, 3))
+    dataset = dataset.map(lambda x: read_img(x, 1))
     if D.model == 'RDN':
         dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
     else:
-        # dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
         dataset = dataset.map(tf_preprocess_metaSR_img_new, num_parallel_calls=20)
-    dataset = dataset.apply(tf.data.experimental.unbatch())
-    dataset = dataset.batch(batch_size=D.batch_size)
+    # dataset = dataset.apply(tf.data.experimental.unbatch())
+    # dataset = dataset.batch(batch_size=D.batch_size)
     dataset = dataset.prefetch(-1)
     return dataset
 

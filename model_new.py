@@ -110,26 +110,12 @@ def model_fn_meta_SR(features, labels, mode, params):
     """当前的多尺度和优化版本训练支持batch_size = 8的倍数的情况"""
     res_shape = tf.shape(res)
     res = tf.reshape(res, [res_shape[0], -1, meta_sr_kernel_size, meta_sr_kernel_size, res_shape[-1]])
+    output = tf.expand_dims(output, axis=0)
+    output = tf.tile(output, multiples=[res_shape[0], 1, 1, 1, 1, 1, 1])
     output = tf.reshape(output, [-1, meta_sr_kernel_size, meta_sr_kernel_size, c_dim, meta_sr_c_dim])
-    new_reshape = tf.shape(res)
-    array_2 = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True, infer_shape=False)
-    batch_size = 200000
-
-    def cond2(i, b, n, B, array, index):
-        return tf.less(b, B)
-
-    def body2(i, b, n, B, array, index):
-        value = batch_conv(res[b, i * batch_size: (i + 1) * batch_size], output[i * batch_size: (i + 1) * batch_size])
-        array = array.write(index, value)
-        b = tf.cond(tf.greater_equal((i + 1)*batch_size, n), lambda: b + 1, lambda: b)
-        i = tf.cond(tf.greater_equal((i + 1)*batch_size, n), lambda: 0, lambda: i+1)
-        index = tf.add(index, 1)
-        return i, b, n, B, array, index
-
-    _, _, _, _, array, index = tf.while_loop(cond2, body2, loop_vars=[0, 0,  new_reshape[1], new_reshape[0], array_2, 0])
-    array = array.concat()
-    array = tf.squeeze(array)
-    array = tf.reshape(array, [-1, output_shape[1], output_shape[2], meta_sr_c_dim])
+    inputs = tf.reshape(res, [-1, meta_sr_kernel_size, meta_sr_kernel_size, res_shape[-1]])
+    array = batch_conv(inputs, output)
+    array = tf.reshape(array, [res_shape[0], output_shape[1], output_shape[2], meta_sr_c_dim])
     predictions = {"image": array}
     if mode != tf.estimator.ModeKeys.PREDICT:
         loss = tf.reduce_mean(tf.abs(labels - array))
@@ -259,8 +245,8 @@ if __name__ == '__main__':
         else:
             Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR, model_dir=model_dir, config=config,
                                                params=params)
-    train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn_v2(train_filenames), max_steps=200000)
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn_v2(test_filenames), throttle_secs=100, steps=500)
+    train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_filenames), max_steps=200000)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn(test_filenames), throttle_secs=100, steps=500)
     if D.mode == 'predict':
         res = Estimator.predict(lambda: test_input_fn(eval_filenames))
         print(eval_filenames)
