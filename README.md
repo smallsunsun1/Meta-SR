@@ -11,8 +11,6 @@ Code is running on tensorflow-gpu==1.12
 - 5.change D.mode = 'predict' in config.py to predict results
 - 6.download the results folder and see the comparison pictures in personal computer.
 
-Note: The max_value for batch_size is 16 for multiple scale training for meta-SR because of gpu memory.
-
 
 # 5.8 UPDATE
 add a new implementation of meta-SR,(called batch_conv in basemodel.py which support convolution for different kernels values) support batch_size=16 and image_size=50 for multiple scale training. Speed up training speed. model_new.py suppprts batch_size = 16, model.py only support batch_size = 1 in meta-SR mode.
