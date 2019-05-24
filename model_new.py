@@ -32,7 +32,9 @@ def model_fn(features, labels, mode, params):
     FU = UPN(FDF)
     IHR = keras.layers.Conv2D(filters=c_dim, kernel_size=(ks, ks), padding='same')(FU)
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - IHR))
+        loss = tf.reduce_mean(tf.abs(labels - IHR)) + tf.reduce_mean(
+            tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) - tf.stack(tf.image.image_gradients(IHR),
+                                                                                  axis=-1)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('SR_image', IHR, max_outputs=10)
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -122,7 +124,9 @@ def model_fn_meta_SR(features, labels, mode, params):
     array = tf.reshape(array, [res_shape[0], output_shape[1], output_shape[2], meta_sr_c_dim])
     predictions = {"image": array}
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - array))
+        loss = tf.reduce_mean(tf.abs(labels - array)) + tf.reduce_mean(
+            tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) - tf.stack(tf.image.image_gradients(array),
+                                                                                  axis=-1)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('image', array, max_outputs=10)
         update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
