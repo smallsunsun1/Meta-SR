@@ -52,6 +52,9 @@ def model_fn_meta_SR(features, labels, mode, params):
     c_dim = params.get('c_dim', 3)
     ks = params.get('kernel_size', 3)
     learning_rate = params.get('learning_rate', 0.0001)
+    learning_rate = tf.train.piecewise_constant(tf.train.get_or_create_global_step(),
+                                                values=[learning_rate, 0.1 * learning_rate, 0.01 * learning_rate],
+                                                boundaries=[50000, 150000])
     meta_sr_c_dim = params.get('meta_sr_c_dim', 3)
     meta_sr_kernel_size = params.get('meta_sr_kernel_size', 3)
     meta_sr_upsample_scale = params.get('meta_sr_upsample_scale', 3)
@@ -76,7 +79,7 @@ def model_fn_meta_SR(features, labels, mode, params):
         output_shape = label_shape
     else:
         scale = float(meta_sr_upsample_scale)
-        output_shape = feature_shape * meta_sr_upsample_scale
+        output_shape = tf.to_int32(feature_shape * meta_sr_upsample_scale)
     X, Y = tf.meshgrid(tf.range(output_shape[2]), tf.range(output_shape[1]))
     position = tf.stack([Y, X], axis=-1)
     position = tf.cast(position, tf.float32)
@@ -90,15 +93,16 @@ def model_fn_meta_SR(features, labels, mode, params):
     """注释掉用于真正的meta-sr模式"""
     IHR = tf.pad(IHR, paddings=[[0, 0], [1, 1], [1, 1], [0, 0]])
     b = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
-    Scale = tf.cast(scale, tf.int32)
 
     def cond(i, j, h, w, b):
         return tf.less(i, h)
 
     def body(i, j, h, w, b):
         index = i * w + j
-        temp = IHR[:, i // Scale:i // Scale + meta_sr_kernel_size,
-               j // Scale:j // Scale + meta_sr_kernel_size, :]
+        p_x = tf.to_int32(tf.floordiv(tf.to_float(i), scale))
+        p_y = tf.to_int32(tf.floordiv(tf.to_float(j), scale))
+        temp = IHR[:, p_x:p_x + meta_sr_kernel_size,
+               p_y:p_y + meta_sr_kernel_size, :]
         b = b.write(index, temp)
         i = tf.cond(tf.equal(j + 1, w), lambda: i + 1, lambda: i)
         j = tf.mod(j + 1, w)
@@ -125,7 +129,7 @@ def model_fn_meta_SR(features, labels, mode, params):
         if mode == tf.estimator.ModeKeys.TRAIN:
             with tf.control_dependencies(update_op):
                 train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss,
-                                                                      global_step=tf.train.get_or_create_global_step())
+                                                                          global_step=tf.train.get_or_create_global_step())
             return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op)
         elif mode == tf.estimator.ModeKeys.EVAL:
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss)
@@ -229,7 +233,7 @@ if __name__ == '__main__':
         session_configs = tf.ConfigProto(allow_soft_placement=True)
         session_configs.gpu_options.allow_growth = True
         config = tf.estimator.RunConfig(train_distribute=strategy, session_config=session_configs,
-                                        log_step_count_steps=20, save_checkpoints_steps=2000,
+                                        log_step_count_steps=5, save_checkpoints_steps=2000,
                                         eval_distribute=strategy, save_summary_steps=500)
         if D.model == 'RDN':
             Estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, config=config,

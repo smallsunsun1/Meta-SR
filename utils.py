@@ -88,30 +88,23 @@ def preprocess_metaSR_img(image):
     if D.model == 'RDN':
         scale = D.scale
     else:
-        scale = np.random.random_integers(2, 4, size=[])
-    h = np.shape(image)[0]
-    w = np.shape(image)[1]
-    h_ = np.shape(image)[0]
-    w_ = np.shape(image)[1]
-    h_ = h_ // scale * scale
-    w_ = w_ // scale * scale
-    image = image[:h_, :w_, :]
+        scale = np.random.random_integers(20, 40, size=[]) / 10
     probability_gaussian = np.random.uniform(0, 10, size=())
     if probability_gaussian > 5:
         temp_image = cv2.GaussianBlur(image, ksize=(7, 7), sigmaX=1.0)
     else:
         temp_image = image
-    input = cv2.resize(temp_image, (w // scale, h // scale), interpolation=cv2.INTER_CUBIC)
-    h, w = np.shape(input)[:2]
+    h, w = np.shape(image)[:2]
     total_input = []
     total_label = []
+    width = (D.image_size * scale).astype(np.int32)
+    height = (D.image_size * scale).astype(np.int32)
+    step = np.ceil(D.stride * scale).astype(np.int32)
     kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], np.float32)
-    for x in range(0, h * scale - D.image_size * scale + 1, D.stride * scale):
-        for y in range(0, w * scale - D.image_size * scale + 1, D.stride * scale):
-            sub_label = image[x:x + D.image_size * scale, y:y + D.image_size * scale]
-            x_i = x // scale
-            y_i = y // scale
-            sub_input = input[x_i:x_i + D.image_size, y_i:y_i + D.image_size]
+    for x in range(0, h - height + 1, step):
+        for y in range(0, w  - width + 1, step):
+            sub_label = image[x:x + height, y:y + width]
+            sub_input = cv2.resize(temp_image[x:x + height, y:y + width], (D.image_size, D.image_size))
             noise = np.random.normal(size=np.shape(sub_input))
             probability_noise = np.random.uniform(0, 10, size=())
             probability_horizon = np.random.uniform(0, 10, size=())
