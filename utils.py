@@ -7,7 +7,7 @@ import numpy as np
 
 def read_img(filename, scale=3):
     data = tf.io.read_file(filename)
-    image = tf.image.decode_png(data, channels=3)
+    image = tf.image.decode_image(data, channels=3)
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
     h = h // scale * scale
@@ -18,7 +18,7 @@ def read_img(filename, scale=3):
 
 def read_test_img(filename):
     data = tf.io.read_file(filename)
-    image = tf.image.decode_png(data, channels=3)
+    image = tf.image.decode_image(data, channels=3)
     image = tf.cast(image, tf.float32)
     image = image / 255.0
     image = tf.expand_dims(image, axis=0)
@@ -79,8 +79,8 @@ def preprocess_img(image):
     indices = np.arange(0, len(total_input))
     indices = np.random.shuffle(indices)
     indices = indices[:D.batch_size]
-    output1 = np.stack(total_input, axis=0).astype(np.float32)[indices]
-    output2 = np.stack(total_label, axis=0).astype(np.float32)[indices]
+    output1 = np.stack(total_input, axis=0).astype(np.float32)
+    output2 = np.stack(total_label, axis=0).astype(np.float32)
     return output1[indices], output2[indices]
 
 

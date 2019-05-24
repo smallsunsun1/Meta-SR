@@ -122,7 +122,8 @@ def model_fn_meta_SR(features, labels, mode, params):
     array = tf.reshape(array, [res_shape[0], output_shape[1], output_shape[2], meta_sr_c_dim])
     predictions = {"image": array}
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - array))
+        loss = tf.reduce_mean(tf.abs(labels - array)) + tf.reduce_mean(
+            tf.abs(tf.image.image_gradients(labels) - tf.image.image_gradients(array)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('image', array, max_outputs=10)
         update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
