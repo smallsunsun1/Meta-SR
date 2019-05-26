@@ -14,9 +14,12 @@ Code is running on tensorflow-gpu==1.12
 
 # 5.8 UPDATE
 add a new implementation of meta-SR,(called batch_conv in basemodel.py which support convolution for different kernels values) support batch_size=16 and image_size=50 for multiple scale training. Speed up training speed. model_new.py suppprts batch_size = 16, model.py only support batch_size = 1 in meta-SR mode.
+
+now training mode and some config are all in config.py
 # 5.23 UPDATE
 add a new implementation to avoid while_loop in both training and evaluation.
 # 5.24 UPDATE
 Now training and evaluation support x.x scales rather than interger scale
+# 5.26 UPDATE
+Now training and evaluation all works well in meta-SR. The limitation is because of weight_prediction fc module, when HxW is very large,we dont't have enough gpu memory to store it. So when predict, you need to change 1 large picture into several smaller picture, and predict for each smaller picture, finally concat those results back to finally large picture.
 
-now training mode and some config are all in config.py
