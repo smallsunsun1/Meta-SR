@@ -19,9 +19,12 @@ def model_fn(features, labels, mode, params):
     ks = params.get('kernel_size', 3)
     batch_size = params.get('batch_size', 32)
     learning_rate = params.get('learning_rate', 0.0001)
+    learning_rate = tf.train.piecewise_constant(tf.train.get_or_create_global_step(),
+                                                values=[learning_rate, 0.1 * learning_rate, 0.01 * learning_rate],
+                                                boundaries=[100000, 150000])
     image_size = params.get('image_size', 32)
+    features.set_shape([None, None, None, 3])
     if mode != tf.estimator.ModeKeys.PREDICT:
-        features.set_shape([None, None, None, 3])
         labels.set_shape([None, None, None, 3])
     F_1 = keras.layers.Conv2D(filters=G0, kernel_size=(ks, ks), padding='same')(features)
     F0 = keras.layers.Conv2D(filters=G, kernel_size=(ks, ks), padding='same')(F_1)
@@ -32,9 +35,8 @@ def model_fn(features, labels, mode, params):
     FU = UPN(FDF)
     IHR = keras.layers.Conv2D(filters=c_dim, kernel_size=(ks, ks), padding='same')(FU)
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - IHR)) + tf.reduce_mean(
-            tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) - tf.stack(tf.image.image_gradients(IHR),
-                                                                                  axis=-1)))
+        loss = tf.reduce_mean(tf.abs(labels - IHR)) + tf.reduce_mean(tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) -
+                                                                            tf.stack(tf.image.image_gradients(IHR), axis=-1)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('SR_image', IHR, max_outputs=10)
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -56,16 +58,14 @@ def model_fn_meta_SR(features, labels, mode, params):
     learning_rate = params.get('learning_rate', 0.0001)
     learning_rate = tf.train.piecewise_constant(tf.train.get_or_create_global_step(),
                                                 values=[learning_rate, 0.1 * learning_rate, 0.01 * learning_rate],
-                                                boundaries=[50000, 150000])
+                                                boundaries=[100000, 150000])
     meta_sr_c_dim = params.get('meta_sr_c_dim', 3)
     meta_sr_kernel_size = params.get('meta_sr_kernel_size', 3)
     meta_sr_upsample_scale = params.get('meta_sr_upsample_scale', 3)
-
+    features.set_shape([None, None, None, 3])
     if mode == tf.estimator.ModeKeys.TRAIN:
-        features.set_shape([None, None, None, 3])
         labels.set_shape([None, None, None, 3])
     if mode == tf.estimator.ModeKeys.EVAL:
-        features.set_shape([None, None, None, 3])
         labels.set_shape([None, None, None, 3])
     F_1 = keras.layers.Conv2D(filters=G0, kernel_size=(ks, ks), padding='same')(features)
     F0 = keras.layers.Conv2D(filters=G, kernel_size=(ks, ks), padding='same')(F_1)
@@ -124,9 +124,8 @@ def model_fn_meta_SR(features, labels, mode, params):
     array = tf.reshape(array, [res_shape[0], output_shape[1], output_shape[2], meta_sr_c_dim])
     predictions = {"image": array}
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - array)) + tf.reduce_mean(
-            tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) - tf.stack(tf.image.image_gradients(array),
-                                                                                  axis=-1)))
+        loss = tf.reduce_mean(tf.abs(labels - array)) + tf.reduce_mean(tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) -
+                                                                            tf.stack(tf.image.image_gradients(array), axis=-1)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('image', array, max_outputs=10)
         update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -211,7 +210,8 @@ def model_fn_meta_SR_new(features, labels, mode, params):
     res = tf.transpose(res, perm=[2, 0, 1, 3])
     predictions = {"image": res}
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - res))
+        loss = tf.reduce_mean(tf.abs(labels - res)) + tf.reduce_mean(tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) -
+                                                                            tf.stack(tf.image.image_gradients(res), axis=-1)))
         tf.summary.scalar('loss', loss)
         tf.summary.image('image', res, max_outputs=10)
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -237,7 +237,7 @@ if __name__ == '__main__':
         session_configs = tf.ConfigProto(allow_soft_placement=True)
         session_configs.gpu_options.allow_growth = True
         config = tf.estimator.RunConfig(train_distribute=strategy, session_config=session_configs,
-                                        log_step_count_steps=5, save_checkpoints_steps=2000,
+                                        log_step_count_steps=20, save_checkpoints_steps=2000,
                                         eval_distribute=strategy, save_summary_steps=500)
         if D.model == 'RDN':
             Estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, config=config,
@@ -254,9 +254,10 @@ if __name__ == '__main__':
             Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR, model_dir=model_dir, config=config,
                                                params=params)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_filenames), max_steps=200000)
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn(test_filenames), throttle_secs=100, steps=500)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn(test_filenames), throttle_secs=100)
     if D.mode == 'predict':
-        res = Estimator.predict(lambda: test_input_fn(eval_filenames))
+        vec = []
+        res = Estimator.predict(lambda: test_input_fn_v2(eval_filenames[10:11]))
         print(eval_filenames)
         for idx, ele in enumerate(res):
             print("proprocess image {}".format(idx))
@@ -265,7 +266,7 @@ if __name__ == '__main__':
             image = np.clip(image, 0, 255)
             image = image.astype(np.uint8)
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imwrite('./result_v2/{}'.format(os.path.basename(eval_filenames[idx])), image)
+            cv2.imwrite('./result_v1/{}'.format(os.path.basename(eval_filenames[idx])), image)
             if idx == 100:
                 break
     else:

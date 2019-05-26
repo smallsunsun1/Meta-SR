@@ -78,7 +78,8 @@ def preprocess_img(image):
             total_label.append(sub_label)
     indices = np.arange(0, len(total_input))
     np.random.shuffle(indices)
-    indices = indices[:D.batch_size]
+    length = len(total_input) // D.batch_size * D.batch_size
+    indices = indices[:length]
     output1 = np.stack(total_input, axis=0).astype(np.float32)
     output2 = np.stack(total_label, axis=0).astype(np.float32)
     return output1[indices], output2[indices]
@@ -135,7 +136,8 @@ def preprocess_metaSR_img(image):
             total_label.append(sub_label)
     indices = np.arange(0, len(total_input))
     np.random.shuffle(indices)
-    indices = indices[:D.batch_size]
+    length = len(total_input) // D.batch_size * D.batch_size
+    indices = indices[:length]
     output1 = np.stack(total_input, axis=0).astype(np.float32)
     output2 = np.stack(total_label, axis=0).astype(np.float32)
     return output1[indices], output2[indices]
@@ -252,13 +254,14 @@ def tf_preprocess_metaSR_img_new(image):
 
 
 
-def preprocess_eval_image(image):
+def preprocess_eval_image(image, scale=3):
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
+    image.set_shape([None, None, None])
     if D.model == 'RDN':
-        input = tf.image.resize_images(image, [h // D.scale, w // D.scale], tf.image.ResizeMethod.BICUBIC)
+        input = tf.image.resize_images(image, [h // scale, w // scale], tf.image.ResizeMethod.BICUBIC)
     else:
-        input = tf.image.resize_images(image, [h // D.meta_sr_upsample_scale, w // D.meta_sr_upsample_scale], tf.image.ResizeMethod.BICUBIC)
+        input = tf.image.resize_images(image, [h // scale, w // scale], tf.image.ResizeMethod.BICUBIC)
     input = tf.cast(input, tf.float32)
     image = tf.cast(image, tf.float32)
     input = tf.divide(input, 255.0)
@@ -294,21 +297,19 @@ def preprocess_train_image(image):
     return input, image
 
 
-def generate_dict(features, labels, scales):
-    return {"features": features, "scales": scales}, labels
-
-
 def train_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
     dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(5000, 200))
     dataset = dataset.map(lambda x: read_img(x, 1))
     if D.model == 'RDN':
         dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.apply(tf.data.experimental.unbatch())
+        dataset = dataset.batch(batch_size=D.batch_size)
     else:
         dataset = dataset.map(lambda x: tf.py_func(preprocess_metaSR_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.apply(tf.data.experimental.unbatch())
+        dataset = dataset.batch(batch_size=D.batch_size)
         # dataset = dataset.map(tf_preprocess_metaSR_img, num_parallel_calls=20)
-    # dataset = dataset.apply(tf.data.experimental.unbatch())
-    # dataset = dataset.batch(batch_size=D.batch_size)
     dataset = dataset.prefetch(-1)
     return dataset
 
@@ -318,18 +319,22 @@ def train_input_fn_v2(filenames):
     dataset = dataset.map(lambda x: read_img(x, 1))
     if D.model == 'RDN':
         dataset = dataset.map(lambda x: tf.py_func(preprocess_img, [x], Tout=[tf.float32, tf.float32]))
+        dataset = dataset.apply(tf.data.experimental.unbatch())
+        dataset = dataset.batch(batch_size=D.batch_size)
     else:
         dataset = dataset.map(tf_preprocess_metaSR_img_new, num_parallel_calls=20)
-    # dataset = dataset.apply(tf.data.experimental.unbatch())
-    # dataset = dataset.batch(batch_size=D.batch_size)
     dataset = dataset.prefetch(-1)
     return dataset
 
 
 def eval_input_fn(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
-    dataset = dataset.map(lambda x: read_img(x, D.meta_sr_upsample_scale))
-    dataset = dataset.map(preprocess_eval_image)
+    if D.mode == "RDN":
+        scale = D.scale
+    else:
+        scale = np.random.random_integers(3, 4, [])
+    dataset = dataset.map(lambda x: read_img(x, scale))
+    dataset = dataset.map(preprocess_eval_image, scale)
     dataset = dataset.prefetch(-1)
     return dataset
 
@@ -339,14 +344,46 @@ def test_input_fn(filenames):
     dataset = dataset.prefetch(-1)
     return dataset
 
+def slice_image(image, slice=40):
+    image = tf.squeeze(image, axis=0)
+    h = tf.shape(image)[0]
+    w = tf.shape(image)[1]
+    h_ = tf.to_int32(tf.floordiv(h, slice) * slice)
+    w_ = tf.to_int32(tf.floordiv(w, slice) * slice)
+    image = image[:h_, :w_, :]
+    array = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
+    def cond(i, j, h, w, b, index):
+        return i < h
+    def body(i, j, h, w, b, index):
+        input = image[i:i+slice,j:j+slice]
+        i = tf.cond(tf.greater_equal(j + slice, w), lambda: i + slice, lambda: i)
+        j = tf.cond(tf.greater_equal(j + slice, w), lambda: 0, lambda: j + slice)
+        index = tf.add(index, 1)
+        b = b.write(index, input)
+        return i, j, h, w, b, index
+    _, _, _, _,res, _ = tf.while_loop(cond, body, [0, 0, h_, w_, array, 0])
+    res = res.stack()
+    return res
+
+
+
+def test_input_fn_v2(filenames):
+    dataset = tf.data.Dataset.from_tensor_slices(filenames)
+    dataset = dataset.map(read_test_img)
+    dataset = dataset.map(lambda x:slice_image(x, 40))
+    dataset = dataset.apply(tf.data.experimental.unbatch())
+    dataset = dataset.batch(1)
+    dataset = dataset.prefetch(-1)
+    return dataset
+
 
 if __name__ == '__main__':
     tf.enable_eager_execution()
     train_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_train_HR/*')
-    test_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_test_HR/*')
+    test_filenames = glob.glob('/home/admin-seu/sss/Dataset/test_data/*')
     # dataset = eval_input_fn(test_filenames)
-    dataset = train_input_fn_v2(train_filenames)
+    dataset = test_input_fn_v2(test_filenames)
     for value in dataset:
-        # print(value)
-        print(tf.shape(value[0]))
-        print(tf.shape(value[1]))
+        print(value)
+        # print(tf.shape(value[0]))
+        # print(tf.shape(value[1]))

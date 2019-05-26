@@ -243,7 +243,7 @@ if __name__ == '__main__':
             Estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, config=config,
                                                params=params)
         else:
-            Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR_new, model_dir=model_dir, config=config,
+            Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR, model_dir=model_dir, config=config,
                                            params=params)
     else:
         config = tf.estimator.RunConfig(save_checkpoints_steps=1000, log_step_count_steps=10)
@@ -251,10 +251,10 @@ if __name__ == '__main__':
             Estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir, params=params,
                                                config=config)
         else:
-            Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR_new, model_dir=model_dir, config=config,
+            Estimator = tf.estimator.Estimator(model_fn=model_fn_meta_SR, model_dir=model_dir, config=config,
                                            params=params)
     train_spec = tf.estimator.TrainSpec(input_fn=lambda: train_input_fn(train_filenames), max_steps=200000)
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn(test_filenames), throttle_secs=100)
+    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: eval_input_fn(test_filenames), throttle_secs=100)
     if D.mode == 'predict':
         res = Estimator.predict(lambda :test_input_fn(eval_filenames))
         print(eval_filenames)
