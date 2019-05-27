@@ -11,6 +11,10 @@ Code is running on tensorflow-gpu==1.12
 - 5.change D.mode = 'predict' in config.py to predict results
 - 6.download the results folder and see the comparison pictures in personal computer.
 
+# models
+链接: https://pan.baidu.com/s/1kIG0vEdxgS6WhRs0cJlMSg 提取码: 8btp
+This is the training result of RDN model of 3x SR. rename or put it in proper place according to config.py, finally predict you own pictures.
+
 
 # 5.8 UPDATE
 add a new implementation of meta-SR,(called batch_conv in basemodel.py which support convolution for different kernels values) support batch_size=16 and image_size=50 for multiple scale training. Speed up training speed. model_new.py suppprts batch_size = 16, model.py only support batch_size = 1 in meta-SR mode.
