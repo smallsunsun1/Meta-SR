@@ -13,6 +13,7 @@ Code is running on tensorflow-gpu==1.12
 
 # models
 链接: https://pan.baidu.com/s/1kIG0vEdxgS6WhRs0cJlMSg 提取码: 8btp
+
 This is the training result of RDN model of 3x SR. rename or put it in proper place according to config.py, finally predict you own pictures.
 
 
