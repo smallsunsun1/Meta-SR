@@ -257,24 +257,34 @@ if __name__ == '__main__':
     if D.mode == 'predict':
         vec = []
         result = []
-        res = Estimator.predict(lambda: test_input_fn_v2(["/home/admin-seu/sss/Dataset/test_data/0997.png"]))
-        # print(eval_filenames[10])
-        for idx, ele in enumerate(res):
-            print("proprocess image {}".format(idx))
-            image = ele['image']
-            image = image * 255
-            image = np.clip(image, 0, 255)
-            image = image.astype(np.uint8)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            result.append(image)
-            if (idx+1) % 17 == 0:
-                result = np.concatenate(result, axis=1)
-                vec.append(result)
-                result = []
-            # cv2.imwrite('./result_v1/{}.png'.format(idx), image)
-        vec = np.concatenate(vec, axis=0)
-        # vec = np.reshape(vec, [-1, 2040, 3])
-        # print(np.shape(vec))
-        cv2.imwrite("res.png", vec)
+        if D.model == 'metaSR':
+            res = Estimator.predict(lambda: test_input_fn_v2(["/home/admin-seu/sss/Dataset/test_data/0997.png"]))
+            for idx, ele in enumerate(res):
+                print("proprocess image {}".format(idx))
+                image = ele['image']
+                image = image * 255
+                image = np.clip(image, 0, 255)
+                image = image.astype(np.uint8)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                result.append(image)
+                if (idx+1) % 17 == 0:
+                    result = np.concatenate(result, axis=1)
+                    vec.append(result)
+                    result = []
+                # cv2.imwrite('./result_v1/{}.png'.format(idx), image)
+            vec = np.concatenate(vec, axis=0)
+            # vec = np.reshape(vec, [-1, 2040, 3])
+            # print(np.shape(vec))
+            cv2.imwrite("res.png", vec)
+        else:
+            res = Estimator.predict(lambda :test_input_fn(eval_filenames))
+            for idx, ele in enumerate(res):
+                print("proprocess image {}".format(idx))
+                image = ele['image']
+                image = image * 255
+                image = np.clip(image, 0, 255)
+                image = image.astype(np.uint8)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite('./result_v1/{}.png'.format(idx), image)
     else:
         tf.estimator.train_and_evaluate(Estimator, train_spec=train_spec, eval_spec=eval_spec)
