@@ -81,7 +81,7 @@ def model_fn_meta_SR(features, labels, mode, params):
         output_shape = label_shape
     else:
         scale = float(meta_sr_upsample_scale)
-        output_shape = tf.to_int32(feature_shape * meta_sr_upsample_scale)
+        output_shape = tf.to_int32(tf.to_float(feature_shape) * meta_sr_upsample_scale)
     X, Y = tf.meshgrid(tf.range(output_shape[2]), tf.range(output_shape[1]))
     position = tf.stack([Y, X], axis=-1)
     position = tf.cast(position, tf.float32)
@@ -124,8 +124,7 @@ def model_fn_meta_SR(features, labels, mode, params):
     array = tf.reshape(array, [res_shape[0], output_shape[1], output_shape[2], meta_sr_c_dim])
     predictions = {"image": array}
     if mode != tf.estimator.ModeKeys.PREDICT:
-        loss = tf.reduce_mean(tf.abs(labels - array)) + tf.reduce_mean(tf.abs(tf.stack(tf.image.image_gradients(labels), axis=-1) -
-                                                                            tf.stack(tf.image.image_gradients(array), axis=-1)))
+        loss = tf.reduce_mean(tf.abs(labels - array))
         tf.summary.scalar('loss', loss)
         tf.summary.image('image', array, max_outputs=10)
         update_op = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -257,8 +256,9 @@ if __name__ == '__main__':
     eval_spec = tf.estimator.EvalSpec(input_fn=lambda: train_input_fn(test_filenames), throttle_secs=100)
     if D.mode == 'predict':
         vec = []
-        res = Estimator.predict(lambda: test_input_fn_v2(eval_filenames[10:11]))
-        print(eval_filenames)
+        result = []
+        res = Estimator.predict(lambda: test_input_fn_v2(["/home/admin-seu/sss/Dataset/test_data/0997.png"]))
+        # print(eval_filenames[10])
         for idx, ele in enumerate(res):
             print("proprocess image {}".format(idx))
             image = ele['image']
@@ -266,8 +266,15 @@ if __name__ == '__main__':
             image = np.clip(image, 0, 255)
             image = image.astype(np.uint8)
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imwrite('./result_v1/{}'.format(os.path.basename(eval_filenames[idx])), image)
-            if idx == 100:
-                break
+            result.append(image)
+            if (idx+1) % 17 == 0:
+                result = np.concatenate(result, axis=1)
+                vec.append(result)
+                result = []
+            # cv2.imwrite('./result_v1/{}.png'.format(idx), image)
+        vec = np.concatenate(vec, axis=0)
+        # vec = np.reshape(vec, [-1, 2040, 3])
+        # print(np.shape(vec))
+        cv2.imwrite("res.png", vec)
     else:
         tf.estimator.train_and_evaluate(Estimator, train_spec=train_spec, eval_spec=eval_spec)

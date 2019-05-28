@@ -349,20 +349,30 @@ def slice_image(image, slice=40):
     h = tf.shape(image)[0]
     w = tf.shape(image)[1]
     h_ = tf.to_int32(tf.floordiv(h, slice) * slice)
-    w_ = tf.to_int32(tf.floordiv(w, slice) * slice)
-    image = image[:h_, :w_, :]
-    array = tf.TensorArray(dtype=tf.float32, size=1, dynamic_size=True)
-    def cond(i, j, h, w, b, index):
-        return i < h
-    def body(i, j, h, w, b, index):
-        input = image[i:i+slice,j:j+slice]
-        i = tf.cond(tf.greater_equal(j + slice, w), lambda: i + slice, lambda: i)
-        j = tf.cond(tf.greater_equal(j + slice, w), lambda: 0, lambda: j + slice)
-        index = tf.add(index, 1)
-        b = b.write(index, input)
-        return i, j, h, w, b, index
-    _, _, _, _,res, _ = tf.while_loop(cond, body, [0, 0, h_, w_, array, 0])
+    image = image[:h_,:,:]
+    array = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True, infer_shape=False)
+    def cond(i, n, b, index):
+        return i < n
+    def body(i, n, b, index):
+        b = b.write(index, image[i: i + slice, :, :])
+        i = i + slice
+        index = index + 1
+        return i, n, b, index
+    _, _, res, _ = tf.while_loop(cond, body, [0, h_, array, 0])
     res = res.stack()
+    return res
+
+def py_slice_image(image, slice=40):
+    image = np.squeeze(image, axis=0)
+    h, w = np.shape(image)[:2]
+    h_ = h // slice * slice
+    w_ = w // slice * slice
+    res = []
+    for i in range(0, h_, slice):
+        for j in range(0, w_, slice):
+            res.append(image[i:i+slice, j:j+slice])
+    res = np.stack(res, axis=0)
+    res = res.astype(np.float32)
     return res
 
 
@@ -370,9 +380,10 @@ def slice_image(image, slice=40):
 def test_input_fn_v2(filenames):
     dataset = tf.data.Dataset.from_tensor_slices(filenames)
     dataset = dataset.map(read_test_img)
-    dataset = dataset.map(lambda x:slice_image(x, 40))
+    # dataset = dataset.map(lambda x:slice_image(x, 40))
+    dataset = dataset.map(lambda x:tf.py_func(py_slice_image, [x], tf.float32))
     dataset = dataset.apply(tf.data.experimental.unbatch())
-    dataset = dataset.batch(1)
+    dataset = dataset.batch(17)
     dataset = dataset.prefetch(-1)
     return dataset
 
@@ -382,8 +393,11 @@ if __name__ == '__main__':
     train_filenames = glob.glob('/home/admin-seu/sss/Dataset/DIV2K_train_HR/*')
     test_filenames = glob.glob('/home/admin-seu/sss/Dataset/test_data/*')
     # dataset = eval_input_fn(test_filenames)
-    dataset = test_input_fn_v2(test_filenames)
+    dataset = test_input_fn_v2(test_filenames[10:11])
+    total = 0
     for value in dataset:
         print(value)
+        total += 1
+    print(total)
         # print(tf.shape(value[0]))
         # print(tf.shape(value[1]))
