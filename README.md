@@ -1,6 +1,8 @@
 # Meta-SR: A Magnification-Arbitrary Network for Super-Resolution && RDN model implementation
 Super Resolution RDN and Meta-SR implementation use tf.estimator
+
 Code is running on tensorflow-gpu==1.12
+
 In 2 gpus mode, the gpu utils can achieve 95%+, if your have more gpus,you can set num_gpus=xxx。
 
 # Step by Step tutorial
