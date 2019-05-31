@@ -13,10 +13,12 @@ Code is running on tensorflow-gpu==1.12
 
 # models
 链接: https://pan.baidu.com/s/1kIG0vEdxgS6WhRs0cJlMSg 提取码: 8btp
+链接:https://pan.baidu.com/s/1iEeAhN_CpXTkXpvjsNbDKw  密码:gxf1
 
-This is the training result of RDN model of 3x SR. rename or put it in proper place according to config.py, finally predict you own pictures.
+This is the training result of RDN model of 3x and 2x SR. rename or put it in proper place according to config.py, finally predict you own pictures.
 
-The model of meta-sr will be release soon!
+The 3x model is trained with image scaled to 0~1, The 2x model is trained with image scaled to -1~1.
+The meta-SR model is trained with 0~1, but the result are not excellent enough. so will change some code or training skills to give better results and release later!
 
 
 # 5.8 UPDATE
