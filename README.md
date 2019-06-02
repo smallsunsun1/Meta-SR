@@ -14,15 +14,19 @@ In 2 gpus mode, the gpu utils can achieve 95%+, if your have more gpus,you can s
 - 6.download the results folder and see the comparison pictures in personal computer.
 
 # models
-链接: https://pan.baidu.com/s/1kIG0vEdxgS6WhRs0cJlMSg 提取码: 8btp
+链接: https://pan.baidu.com/s/1kIG0vEdxgS6WhRs0cJlMSg 提取码: 8btp     RDN
 
-链接:https://pan.baidu.com/s/1iEeAhN_CpXTkXpvjsNbDKw  密码:gxf1
+链接:https://pan.baidu.com/s/1iEeAhN_CpXTkXpvjsNbDKw  密码:gxf1     RDN
+
+
+链接:https://pan.baidu.com/s/1VRjDlnoNfOT7vXwoTSviVQ  密码:im2v     metaSR
 
 This is the training result of RDN model of 3x and 2x SR. rename or put it in proper place according to config.py, finally predict you own pictures.
 
 The 3x model is trained with image scaled to (0, 1). The 2x model is trained with image scaled to (-1, 1).
 
-The meta-SR model is trained with 0~1, but the result are not excellent enough. So I will change some code or training skills to give better results and will be released later!
+The meta-SR model is trained with 0~1, but the result are not excellent enough. you can use it just for test.But now exists 2 problems. 1. the result is not as well as RDN.  2. because of use the graph mode, when image is large, weight_prediction part
+will need use large memory,which will cause OOM, ths solution is mentioned in 5.26UPDATE, but concat small picture into large picture will cause slits in the picture, I will change the code to support large image prediction.
 
 
 # 5.8 UPDATE
